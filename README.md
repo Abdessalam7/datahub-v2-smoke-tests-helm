@@ -6,9 +6,6 @@ into the **same namespace** as
 (`monitoring-datahub-v2` by default) — it's the producer for the COS status
 files the web UI reads.
 
-Modeled directly on `datahub-v2-web-ui-helm`'s structure and conventions
-(plain `.Values.x` references, no generic passthrough templating).
-
 ## Layout
 
 ```
@@ -20,13 +17,16 @@ templates/
   serviceaccount.yaml
 ```
 
+Single Deployment (not a CronJob): the container runs one pass of
+`scripts/main.py` and exits, and Kubernetes restarts it — matching how this
+workload runs today.
+
 ## Before deploying
 
 1. **`smokeTests.instances`** in `values.yaml` is a native YAML list (same
    shape as the Airflow `airflowctl_inst_list_json` variable) rendered to
    JSON by `templates/configmap-instances.yaml`. Currently seeded with two
-   example instances — update the list for your real set before installing,
-   otherwise `run_airflow()` only checks those two.
+   example instances — update the list for your real set before installing.
 2. **COS credentials**: this chart reads from the same `cos-credentials`
    Secret as `datahub-v2-web-ui-helm` (must already exist in the namespace —
    this chart does not create it). Its key names don't all match what
@@ -40,20 +40,7 @@ templates/
    `TARGET=prod ENV_LIST=prod,pprd`, or `SERVICE=spark`).
 4. **Spark only — Vault mTLS cert**: `smokeTests.vaultClientCert.enabled` is
    `false` by default. `spark_auth.py` needs a client certificate mounted at
-   `/client-cert` to authenticate to Vault, which depends on a Vault
-   cert-auth role being set up for this workload's own identity (a separate,
-   still-open decision — see the design discussion that produced this chart
-   for the trade-offs between reusing Airflow's existing role vs. creating a
-   dedicated one). Once that's settled: set `vaultClientCert.enabled: true`,
-   point `vaultClientCert.secretName` at the Secret cert-manager issues, and
-   fill in `env.VAULT_NS`/`env.VAULT_URL`.
-
-## Note on the "one Deployment" shape
-
-This mirrors what's actually running today for `pysmoke-test`/
-`datahub-v2-smoke-tests`: a single-replica Deployment (not a CronJob) whose
-container exits after one pass and gets restarted by Kubernetes. If you want
-true periodic scheduling instead of restart-driven repetition, this chart
-would need a `CronJob` instead of a `Deployment` — not done here since the
-brief was to match what's actually deployed today, not to change the
-scheduling model.
+   `/client-cert` to authenticate to Vault. Once a Vault cert-auth role is
+   set up for this workload: set `vaultClientCert.enabled: true`, point
+   `vaultClientCert.secretName` at the Secret cert-manager issues, and fill
+   in `env.VAULT_NS`/`env.VAULT_URL`.
