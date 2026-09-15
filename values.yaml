@@ -12,24 +12,9 @@ smokeTests:
     tag: "main"
     pullPolicy: Always
 
-  replicaCount: 1
-
-  command: ["python", "-u", "scripts/main.py"]
-
-  # Maps 1:1 to scripts/config.py's env vars. SERVICE picks the check
-  # (airflow or spark); TARGET/ENV_LIST pick the environment split
-  # (e.g. TARGET=hprd ENV_LIST=dev,int,qual, or TARGET=prod ENV_LIST=prod,pprd).
-  env:
-    SERVICE: "airflow"
-    TARGET: "hprd"
-    ENV_LIST: "dev,int,qual"
-    HTTP_TIMEOUT: "10"
-    INSTANCES_CONFIG_PATH: "/etc/datahub-v2-smoke-tests/instances.json"
-    LOCAL_OUTPUT_PATH: "/tmp/status.json"
-    # Spark only — leave blank and set vaultClientCert.enabled below once the
-    # Vault cert-auth role for this workload's identity is set up.
-    VAULT_NS: ""
-    VAULT_URL: ""
+  # Shared by both CronJobs (Airflow and Spark checks run as separate Jobs).
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Forbid
 
   # cos-credentials is the same Secret datahub-v2-web-ui-helm's backend reads.
   # Its actual keys (COS_ENDPOINT_URL, ...) don't all match what
@@ -63,13 +48,35 @@ smokeTests:
     runAsGroup: 1000
     fsGroup: 1000
 
-  # Vault mTLS client cert for the Spark check (see spark_auth.py). Off by
-  # default: flip on once a Certificate/Secret has been provisioned for this
-  # workload's own identity (see datahub-v2-smoke-tests-helm's README).
-  vaultClientCert:
-    enabled: false
-    secretName: ""
-    mountPath: /client-cert
+  # Maps 1:1 to scripts/config.py's env vars (SERVICE is set per-CronJob in
+  # its template, not here). TARGET/ENV_LIST pick the environment split
+  # (e.g. TARGET=hprd ENV_LIST=dev,int,qual, or TARGET=prod ENV_LIST=prod,pprd).
+  airflow:
+    env:
+      TARGET: "hprd"
+      ENV_LIST: "dev,int,qual"
+      HTTP_TIMEOUT: "10"
+      INSTANCES_CONFIG_PATH: "/etc/datahub-v2-smoke-tests/instances.json"
+      LOCAL_OUTPUT_PATH: "/tmp/status.json"
+
+  spark:
+    env:
+      TARGET: "hprd"
+      ENV_LIST: "dev,int,qual"
+      HTTP_TIMEOUT: "10"
+      LOCAL_OUTPUT_PATH: "/tmp/status.json"
+      # Leave blank and set vaultClientCert.enabled below once the Vault
+      # cert-auth role for this workload's identity is set up.
+      VAULT_NS: ""
+      VAULT_URL: ""
+
+    # Vault mTLS client cert for the Spark check (see spark_auth.py). Off by
+    # default: flip on once a Certificate/Secret has been provisioned for
+    # this workload's own identity (see this chart's README).
+    vaultClientCert:
+      enabled: false
+      secretName: ""
+      mountPath: /client-cert
 
   # ============================================================================
   # Airflow instances to check (same shape as the airflowctl_inst_list_json

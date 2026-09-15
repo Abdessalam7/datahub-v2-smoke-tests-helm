@@ -1,0 +1,92 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Values.smokeTests.name }}-airflow
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: {{ .Values.smokeTests.name }}-airflow
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: smoke-tests-airflow
+spec:
+  schedule: {{ .Values.smokeTests.schedule | quote }}
+  concurrencyPolicy: {{ .Values.smokeTests.concurrencyPolicy }}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: {{ .Values.smokeTests.name }}-airflow
+            app.kubernetes.io/instance: {{ .Release.Name }}
+          annotations:
+            checksum/instances-config: {{ include (print $.Template.BasePath "/configmap-instances.yaml") . | sha256sum }}
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ .Values.smokeTests.serviceAccount.name }}
+          imagePullSecrets:
+            - name: {{ .Values.global.imagePullSecret }}
+
+          {{- if .Values.smokeTests.securityContext.enabled }}
+          securityContext:
+            runAsNonRoot: {{ .Values.smokeTests.securityContext.runAsNonRoot }}
+            runAsUser: {{ .Values.smokeTests.securityContext.runAsUser }}
+            runAsGroup: {{ .Values.smokeTests.securityContext.runAsGroup }}
+            fsGroup: {{ .Values.smokeTests.securityContext.fsGroup }}
+          {{- end }}
+
+          containers:
+            - name: smoke-tests-airflow
+              image: "{{ .Values.smokeTests.image.repository }}:{{ .Values.smokeTests.image.tag }}"
+              imagePullPolicy: {{ .Values.smokeTests.image.pullPolicy }}
+              workingDir: /app
+              command: ["python", "-u", "scripts/main.py"]
+
+              env:
+                - name: SERVICE
+                  value: "airflow"
+                {{- range $key, $value := .Values.smokeTests.airflow.env }}
+                - name: {{ $key }}
+                  value: {{ $value | quote }}
+                {{- end }}
+                - name: COS_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.smokeTests.cosSecret.secretName }}
+                      key: {{ .Values.smokeTests.cosSecret.keys.COS_ENDPOINT }}
+                - name: COS_BUCKET_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.smokeTests.cosSecret.secretName }}
+                      key: {{ .Values.smokeTests.cosSecret.keys.COS_BUCKET_NAME }}
+                - name: COS_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.smokeTests.cosSecret.secretName }}
+                      key: {{ .Values.smokeTests.cosSecret.keys.COS_REGION }}
+                - name: COS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.smokeTests.cosSecret.secretName }}
+                      key: {{ .Values.smokeTests.cosSecret.keys.COS_ACCESS_KEY_ID }}
+                - name: COS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.smokeTests.cosSecret.secretName }}
+                      key: {{ .Values.smokeTests.cosSecret.keys.COS_SECRET_ACCESS_KEY }}
+
+              volumeMounts:
+                - name: instances-config
+                  mountPath: /etc/datahub-v2-smoke-tests
+                  readOnly: true
+
+              resources:
+                {{- toYaml .Values.smokeTests.resources | nindent 16 }}
+
+          volumes:
+            - name: instances-config
+              configMap:
+                name: {{ .Values.smokeTests.name }}-instances
+                items:
+                  - key: instances.json
+                    path: instances.json
