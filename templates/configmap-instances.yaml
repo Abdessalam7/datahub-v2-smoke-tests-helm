@@ -7,5 +7,4 @@ metadata:
     app: {{ .Values.smokeTests.name }}
     app.kubernetes.io/instance: {{ .Release.Name }}
 data:
-  instances.json: |
-    {{- .Values.smokeTests.instancesJson | nindent 4 }}
+  instances.json: {{ .Values.smokeTests.instances | toJson | quote }}

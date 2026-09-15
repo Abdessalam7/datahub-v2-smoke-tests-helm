@@ -22,10 +22,11 @@ templates/
 
 ## Before deploying
 
-1. **`smokeTests.instancesJson`** in `values.yaml` is a placeholder (`[]`).
-   Paste in the raw Airflow `airflowctl_inst_list_json` variable content,
-   unmodified, before installing — otherwise `run_airflow()` has nothing to
-   check.
+1. **`smokeTests.instances`** in `values.yaml` is a native YAML list (same
+   shape as the Airflow `airflowctl_inst_list_json` variable) rendered to
+   JSON by `templates/configmap-instances.yaml`. Currently seeded with two
+   example instances — update the list for your real set before installing,
+   otherwise `run_airflow()` only checks those two.
 2. **COS credentials**: this chart reads from the same `cos-credentials`
    Secret as `datahub-v2-web-ui-helm` (must already exist in the namespace —
    this chart does not create it). Its key names don't all match what

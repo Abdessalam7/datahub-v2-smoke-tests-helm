@@ -72,9 +72,27 @@ smokeTests:
     mountPath: /client-cert
 
   # ============================================================================
-  # Airflow instances to check.
-  # Paste the raw JSON array from the Airflow Variable `airflowctl_inst_list_json`
-  # here, unmodified.
+  # Airflow instances to check (same shape as the airflowctl_inst_list_json
+  # Airflow Variable, as a native YAML list instead of a JSON string).
   # ============================================================================
-  instancesJson: |
-    []
+  instances:
+    - apcode: a101731
+      customer:
+        apcode: a101731
+        name: aidi
+        snow_label: a3i
+      env: dev
+      release_id: 53d53716
+      url: https://astronomer-a101731-dev-53d53716.data.cloud.net.intra
+      version: 3.5.3
+      zone: hprd
+    - apcode: ap50708
+      customer:
+        apcode: ap50708
+        name: arval
+        snow_label: arval
+      env: dev
+      release_id: 70af7d64
+      url: https://astronomer-ap50708-dev-70af7d64.data.cloud.net.intra
+      version: 3.5.3
+      zone: hprd
