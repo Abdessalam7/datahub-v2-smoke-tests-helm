@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.smokeTests.name }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: {{ .Values.smokeTests.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: smoke-tests
+spec:
+  replicas: {{ .Values.smokeTests.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.smokeTests.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.smokeTests.name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        checksum/instances-config: {{ include (print $.Template.BasePath "/configmap-instances.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Values.smokeTests.serviceAccount.name }}
+      imagePullSecrets:
+        - name: {{ .Values.global.imagePullSecret }}
+
+      {{- if .Values.smokeTests.securityContext.enabled }}
+      securityContext:
+        runAsNonRoot: {{ .Values.smokeTests.securityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.smokeTests.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.smokeTests.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.smokeTests.securityContext.fsGroup }}
+      {{- end }}
+
+      containers:
+        - name: smoke-tests
+          image: "{{ .Values.smokeTests.image.repository }}:{{ .Values.smokeTests.image.tag }}"
+          imagePullPolicy: {{ .Values.smokeTests.image.pullPolicy }}
+          workingDir: /app
+          command:
+            {{- toYaml .Values.smokeTests.command | nindent 12 }}
+
+          env:
+            {{- range $key, $value := .Values.smokeTests.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: COS_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.smokeTests.cosSecret.secretName }}
+                  key: {{ .Values.smokeTests.cosSecret.keys.COS_ENDPOINT }}
+            - name: COS_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.smokeTests.cosSecret.secretName }}
+                  key: {{ .Values.smokeTests.cosSecret.keys.COS_BUCKET_NAME }}
+            - name: COS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.smokeTests.cosSecret.secretName }}
+                  key: {{ .Values.smokeTests.cosSecret.keys.COS_REGION }}
+            - name: COS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.smokeTests.cosSecret.secretName }}
+                  key: {{ .Values.smokeTests.cosSecret.keys.COS_ACCESS_KEY_ID }}
+            - name: COS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.smokeTests.cosSecret.secretName }}
+                  key: {{ .Values.smokeTests.cosSecret.keys.COS_SECRET_ACCESS_KEY }}
+
+          volumeMounts:
+            - name: instances-config
+              mountPath: /etc/datahub-v2-smoke-tests
+              readOnly: true
+            {{- if .Values.smokeTests.vaultClientCert.enabled }}
+            - name: vault-client-cert
+              mountPath: {{ .Values.smokeTests.vaultClientCert.mountPath }}
+              readOnly: true
+            {{- end }}
+
+          resources:
+            {{- toYaml .Values.smokeTests.resources | nindent 12 }}
+
+      volumes:
+        - name: instances-config
+          configMap:
+            name: {{ .Values.smokeTests.name }}-instances
+            items:
+              - key: instances.json
+                path: instances.json
+        {{- if .Values.smokeTests.vaultClientCert.enabled }}
+        - name: vault-client-cert
+          secret:
+            secretName: {{ .Values.smokeTests.vaultClientCert.secretName }}
+        {{- end }}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: datahub-v2-smoke-tests
+description: Deploy datahub-v2-smoke-tests (Airflow + Spark health checks) into the Datahub v2 monitoring namespace
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
