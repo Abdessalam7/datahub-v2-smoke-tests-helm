@@ -66,22 +66,31 @@ the templates.
      can't be wired automatically since `values.yaml` isn't templated.
    - **A Vault cert-auth role trusting that CA** — this chart can't create it
      (Vault config, not a Kubernetes resource). Once the `Certificate` above
-     is `Ready`, pull its CA and register a role, e.g. from a CI job with a
-     Vault token scoped for it (adapt to your actual policy/namespace):
+     is `Ready`, pull its CA, create a dedicated read-only policy for the
+     Spark client-credentials secret `spark_auth.py` reads, and register the
+     role (adapt namespace to your setup):
      ```bash
      kubectl get secret datahub-v2-smoke-tests-spark-vault-cert \
        -n <namespace> -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/ca.pem
 
+     vault policy write -namespace="a101731" pysmoke-test-spark - <<'EOF'
+     path "secret/data/astronomer-a101731-aas/astronomer-a101731-dev-53d53716/cp-spark-*" {
+       capabilities = ["read"]
+     }
+     EOF
+
      vault write -namespace="a101731" auth/cert/certs/pysmoke-test-spark \
        display_name=pysmoke-test-spark \
-       policies=secretstore \
+       policies=pysmoke-test-spark \
        allowed_common_names=pysmoke-test-spark.data.cloud.net.intra \
        certificate=@/tmp/ca.pem
      ```
-     Adjust `policies` to whatever actually grants read on the Keycloak
-     `oidc-account` secret `spark_auth.py` needs next — `secretstore` is a
-     guess based on what's already attached to similar roles in this org,
-     not confirmed for this specific secret.
+     The secret path above is the one `spark_auth.py` already reads — its
+     `client-id`/`client-secret` have access to every client's Spark tenants
+     (confirmed), so no new Keycloak client needs provisioning. Don't reuse
+     the org's existing `secretstore` policy for this: it's scoped to one
+     specific Airflow instance's own secrets and can be overwritten whenever
+     that instance is redeployed.
 
    Once both are done, fill in `VAULT_NS`/`VAULT_URL` in `spark.env`
    (currently defaulted to `a101731` / the staging Vault address, matching
