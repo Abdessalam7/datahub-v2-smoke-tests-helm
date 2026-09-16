@@ -96,8 +96,11 @@ spark:
       value: "dev"
     - name: PYTHONUNBUFFERED
       value: "1"
+    # The Spark control-plane and auth endpoints are single shared hosts under
+    # "prod" naming regardless of which environments are being checked — ENV_LIST
+    # below (not TARGET) is what filters returned tenants by environment.
     - name: TARGET
-      value: "hprd"
+      value: "prod"
     - name: ENV_LIST
       value: "dev,int,qual"
     - name: SERVICE
