@@ -3,76 +3,10 @@ image:
   tag: main
   pullPolicy: Always
 
-env:
-  - name: ENV
-    value: "dev"
-  - name: PYTHONUNBUFFERED
-    value: "1"
-
-  # Paramètres pysmoke
-  - name: TARGET
-    value: "hprd"
-  - name: ENV_LIST
-    value: "dev,int,qual"
-  - name: SERVICE
-    value: "airflow"
-  - name: HTTP_TIMEOUT
-    value: "10"
-  - name: INSTANCES_CONFIG_PATH
-    value: "/etc/pysmoke-test/instances.json"
-  - name: LOCAL_OUTPUT_PATH
-    value: "/tmp/status.json"
-  - name: COS_OBJECT_KEY
-    value: "monitoring-web/input/airflow/status.json"
-
-  # Spark / Vault — nécessaires pour spark_auth.py (cert-auth Vault)
-  - name: VAULT_NS
-    value: "a101731"
-  - name: VAULT_URL
-    value: "https://vault.staging.echonet.net.intra"
-
-  # Credentials COS injectés depuis le Secret existant `cos-credentials`
-  - name: COS_ENDPOINT
-    valueFrom:
-      secretKeyRef:
-        name: cos-credentials
-        key: COS_ENDPOINT
-  - name: COS_BUCKET_NAME
-    valueFrom:
-      secretKeyRef:
-        name: cos-credentials
-        key: COS_BUCKET_NAME
-  - name: COS_REGION
-    valueFrom:
-      secretKeyRef:
-        name: cos-credentials
-        key: COS_REGION
-  - name: COS_ACCESS_KEY_ID
-    valueFrom:
-      secretKeyRef:
-        name: cos-credentials
-        key: COS_ACCESS_KEY_ID
-  - name: COS_SECRET_ACCESS_KEY
-    valueFrom:
-      secretKeyRef:
-        name: cos-credentials
-        key: COS_SECRET_ACCESS_KEY
-
 command: ["python", "-u", "scripts/main.py"]
-args: []
-resources: {}
 
-nodeSelector: {}
-tolerations: []
-affinity: {}
-
-serviceAccount:
-  create: true
-  name: "pysmoke"
-  annotations:
-    cert-manager.io/issuer: datalab-cloud-echonet-issuer
-    cert-manager.io/issuer-group: horizon.evertrust.io
-    cert-manager.io/issuer-kind: ClusterIssuer
+schedule: "*/10 * * * *"
+concurrencyPolicy: Forbid
 
 imagePullSecrets:
   - name: image-pull-secret
@@ -86,24 +20,133 @@ securityContext:
   runAsGroup: 1000
   fsGroup: 1000
 
-volumes:
-  - name: instances-config
-    configMap:
-      name: pysmoke-test-pysmoke-instances
-      items:
-        - key: instances.json
-          path: instances.json
-  - name: vault-client-cert
-    secret:
-      secretName: pysmoke-test-spark-vault-cert
+nodeSelector: {}
+tolerations: []
+affinity: {}
 
-volumeMounts:
-  - name: instances-config
-    mountPath: /etc/pysmoke-test
-    readOnly: true
-  - name: vault-client-cert
-    mountPath: /client-cert
-    readOnly: true
+serviceAccount:
+  create: true
+  name: "pysmoke"
+  annotations:
+    cert-manager.io/issuer: datalab-cloud-echonet-issuer
+    cert-manager.io/issuer-group: horizon.evertrust.io
+    cert-manager.io/issuer-kind: ClusterIssuer
+
+airflow:
+  env:
+    - name: ENV
+      value: "dev"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: TARGET
+      value: "hprd"
+    - name: ENV_LIST
+      value: "dev,int,qual"
+    - name: SERVICE
+      value: "airflow"
+    - name: HTTP_TIMEOUT
+      value: "10"
+    - name: INSTANCES_CONFIG_PATH
+      value: "/etc/pysmoke-test/instances.json"
+    - name: LOCAL_OUTPUT_PATH
+      value: "/tmp/status.json"
+    - name: COS_OBJECT_KEY
+      value: "monitoring-web/input/airflow/status.json"
+    - name: COS_ENDPOINT
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_ENDPOINT
+    - name: COS_BUCKET_NAME
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_BUCKET_NAME
+    - name: COS_REGION
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_REGION
+    - name: COS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_ACCESS_KEY_ID
+    - name: COS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_SECRET_ACCESS_KEY
+  volumeMounts:
+    - name: instances-config
+      mountPath: /etc/pysmoke-test
+      readOnly: true
+  volumes:
+    - name: instances-config
+      configMap:
+        name: pysmoke-test-pysmoke-instances
+        items:
+          - key: instances.json
+            path: instances.json
+  resources: {}
+
+spark:
+  env:
+    - name: ENV
+      value: "dev"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: TARGET
+      value: "hprd"
+    - name: ENV_LIST
+      value: "dev,int,qual"
+    - name: SERVICE
+      value: "spark"
+    - name: HTTP_TIMEOUT
+      value: "10"
+    - name: LOCAL_OUTPUT_PATH
+      value: "/tmp/status.json"
+    - name: COS_OBJECT_KEY
+      value: "monitoring-web/input/spark/status.json"
+    - name: VAULT_NS
+      value: "a101731"
+    - name: VAULT_URL
+      value: "https://vault.staging.echonet.net.intra"
+    - name: COS_ENDPOINT
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_ENDPOINT
+    - name: COS_BUCKET_NAME
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_BUCKET_NAME
+    - name: COS_REGION
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_REGION
+    - name: COS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_ACCESS_KEY_ID
+    - name: COS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_SECRET_ACCESS_KEY
+  volumeMounts:
+    - name: vault-client-cert
+      mountPath: /client-cert
+      readOnly: true
+  volumes:
+    - name: vault-client-cert
+      secret:
+        secretName: pysmoke-test-spark-vault-cert
+  resources: {}
+
 smokeTest:
   instancesJson: |
     [
