@@ -18,6 +18,8 @@ templates/
   serviceaccount.yaml
   externalsecret.yaml      optional — pulls the image-pull secret from Vault
   certificate.yaml         optional — client cert for Spark's Vault cert-auth
+  vaultdynamicsecret-spark-cert.yaml   optional — Vault PKI reissue generator
+  externalsecret-spark-cert-renew.yaml optional — writes the reissued cert back
 ```
 
 Two separate CronJobs, one per tech, both on `.Values.schedule` (every 10
@@ -95,7 +97,37 @@ the templates.
    Once both are done, fill in `VAULT_NS`/`VAULT_URL` in `spark.env`
    (currently defaulted to `a101731` / the staging Vault address, matching
    the non-prod branch of this org's CI — override for prod).
-6. **`vault.enabled`** (default `false`): if set, `externalsecret.yaml`
+6. **Spark only — automatic cert renewal (`spark.vaultCertRenewal`)**: the
+   client cert from step 5 has a 30-day TTL and isn't renewed by anything
+   above. Since the Vault Kubernetes-auth mount in this cluster isn't
+   self-service (403 on role creation for anyone outside the team that owns
+   it), renewal reuses the cert-auth role you already control instead:
+   `vaultdynamicsecret-spark-cert.yaml` calls Vault's PKI `issue/<pkiRole>`
+   endpoint, authenticating with the *current* client cert
+   (`spark.vaultClientCert.secretName`) via cert-auth — and
+   `externalsecret-spark-cert-renew.yaml` writes the freshly issued
+   cert/key straight back into that same Secret (`creationPolicy: Merge`).
+   Since the refresh runs well inside the 30-day TTL (default
+   `refreshInterval: 24h`), each cycle always has a still-valid cert on hand
+   to authenticate the next one — no bootstrap problem once the Secret
+   exists.
+
+   Both resources are gated by `spark.vaultCertRenewal.enabled` (default
+   `false`) and need the PKI-issue policy added to the existing cert-auth
+   role from step 5:
+   ```bash
+   vault write -namespace="a101731" auth/cert/certs/pysmoke-test-spark \
+     display_name=pysmoke-test-spark \
+     policies=pysmoke-test-spark,pysmoke-spark-pki-issue \
+     allowed_common_names=pysmoke-test-spark.data.cloud.net.intra \
+     certificate=@/tmp/ca.pem
+   ```
+   where `pysmoke-spark-pki-issue` is a policy granting `create`/`update` on
+   `pkis/pysmoke-test/issue/pysmoke-spark`. Requires the
+   `generators.external-secrets.io/v1alpha1 VaultDynamicSecret` CRD (ESO
+   generator, separate from the plain `SecretStore`-based `externalsecret.yaml`
+   above).
+7. **`vault.enabled`** (default `false`): if set, `externalsecret.yaml`
    creates the `imagePullSecretName` Secret from Vault (via the
    external-secrets operator, KV path `vault.kv.path`) instead of assuming
    `image-pull-secret` already exists in the namespace. Not yet validated

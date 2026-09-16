@@ -156,6 +156,17 @@ spark:
     issuerName: datalab-cloud-echonet-issuer
     issuerKind: ClusterIssuer
     issuerGroup: horizon.evertrust.io
+  # Auto-renews spark.vaultClientCert.secretName before its 30-day TTL expires,
+  # using the cert itself (cert-auth) to fetch its own replacement from Vault's
+  # PKI engine — no Kubernetes-auth dependency. See README for the matching
+  # `vault write auth/cert/certs/...` policy update this requires.
+  vaultCertRenewal:
+    enabled: false
+    vaultServer: "https://vault.staging.echonet.net.intra"
+    vaultNamespace: "a101731"
+    pkiPath: "pkis/pysmoke-test"
+    pkiRole: "pysmoke-spark"
+    refreshInterval: "24h"
 
 smokeTest:
   instancesJson: |
