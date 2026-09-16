@@ -146,6 +146,13 @@ spark:
       secret:
         secretName: pysmoke-test-spark-vault-cert
   resources: {}
+  vaultClientCert:
+    enabled: true
+    secretName: pysmoke-test-spark-vault-cert
+    commonName: pysmoke-test-spark.data.cloud.net.intra
+    issuerName: datalab-cloud-echonet-issuer
+    issuerKind: ClusterIssuer
+    issuerGroup: horizon.evertrust.io
 
 smokeTest:
   instancesJson: |
