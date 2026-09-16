@@ -101,8 +101,11 @@ spark:
     # below (not TARGET) is what filters returned tenants by environment.
     - name: TARGET
       value: "prod"
+    # Spark tenants use their own env naming (pprod/prod), distinct from
+    # Airflow's dev/int/qual — confirmed via the tenant-count diagnostic log
+    # in spark_check.py (0 KO/0 total was this filter matching nothing).
     - name: ENV_LIST
-      value: "dev,int,qual"
+      value: "pprod,prod"
     - name: SERVICE
       value: "spark"
     - name: HTTP_TIMEOUT
