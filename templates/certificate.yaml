@@ -10,6 +10,7 @@ spec:
   secretName: {{ .Values.spark.vaultClientCert.secretName }}
   commonName: {{ .Values.spark.vaultClientCert.commonName }}
   usages:
+    - digital signature
     - client auth
   issuerRef:
     name: {{ .Values.spark.vaultClientCert.issuerName }}
