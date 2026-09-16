@@ -1,105 +1,188 @@
-global:
-  registry: docker.artifactory-dogen.group.echonet
-  imagePullSecret: image-pull-secret
-  # Same namespace as datahub-v2-web-ui-helm, so this workload and the web UI
-  # it feeds via COS live side by side.
-  namespace: monitoring-datahub-v2
+image:
+  repository: private.fr2.icr.io/a101731-hprd/datahub-v2-smoke-tests
+  tag: "main"
+  pullPolicy: Always
 
-smokeTests:
-  name: datahub-v2-smoke-tests
-  image:
-    repository: private.fr2.icr.io/a101731-hprd/datahub-v2-smoke-tests
-    tag: "main"
-    pullPolicy: Always
+command: ["python", "-u", "scripts/main.py"]
 
-  # Shared by both CronJobs (Airflow and Spark checks run as separate Jobs).
-  schedule: "*/10 * * * *"
-  concurrencyPolicy: Forbid
+# Both CronJobs (Airflow, Spark) share this schedule.
+schedule: "*/10 * * * *"
+concurrencyPolicy: Forbid
 
-  # cos-credentials is the same Secret datahub-v2-web-ui-helm's backend reads.
-  # Its actual keys (COS_ENDPOINT_URL, ...) don't all match what
-  # scripts/config.py expects (COS_ENDPOINT, ...) — this mapping bridges that.
-  cosSecret:
-    secretName: cos-credentials
-    keys:
-      COS_ENDPOINT: COS_ENDPOINT_URL
-      COS_BUCKET_NAME: COS_BUCKET_NAME
-      COS_REGION: COS_REGION
-      COS_ACCESS_KEY_ID: COS_ACCESS_KEY_ID
-      COS_SECRET_ACCESS_KEY: COS_SECRET_ACCESS_KEY
+imagePullSecrets:
+  - name: image-pull-secret
 
-  resources:
-    requests:
-      cpu: "100m"
-      memory: "128Mi"
-    limits:
-      cpu: "300m"
-      memory: "256Mi"
+podAnnotations: {}
 
-  serviceAccount:
-    create: true
-    name: "datahub-v2-smoke-tests"
-    annotations: {}
+securityContext:
+  enabled: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
 
-  securityContext:
-    enabled: true
-    runAsNonRoot: true
-    runAsUser: 1000
-    runAsGroup: 1000
-    fsGroup: 1000
+nodeSelector: {}
+tolerations: []
+affinity: {}
 
-  # Maps 1:1 to scripts/config.py's env vars (SERVICE is set per-CronJob in
-  # its template, not here). TARGET/ENV_LIST pick the environment split
-  # (e.g. TARGET=hprd ENV_LIST=dev,int,qual, or TARGET=prod ENV_LIST=prod,pprd).
-  airflow:
-    env:
-      TARGET: "hprd"
-      ENV_LIST: "dev,int,qual"
-      HTTP_TIMEOUT: "10"
-      INSTANCES_CONFIG_PATH: "/etc/datahub-v2-smoke-tests/instances.json"
-      LOCAL_OUTPUT_PATH: "/tmp/status.json"
+serviceAccount:
+  create: true
+  name: "datahub-v2-smoke-tests"
+  # Identity cert-manager issues a client certificate for — this is what Spark's
+  # Vault cert-auth (see spark_auth.py) will authenticate as, once wired up.
+  annotations:
+    cert-manager.io/issuer: datalab-cloud-echonet-issuer
+    cert-manager.io/issuer-group: horizon.evertrust.io
+    cert-manager.io/issuer-kind: ClusterIssuer
 
-  spark:
-    env:
-      TARGET: "hprd"
-      ENV_LIST: "dev,int,qual"
-      HTTP_TIMEOUT: "10"
-      LOCAL_OUTPUT_PATH: "/tmp/status.json"
-      # Leave blank and set vaultClientCert.enabled below once the Vault
-      # cert-auth role for this workload's identity is set up.
-      VAULT_NS: ""
-      VAULT_URL: ""
+# Pulls the registry image-pull secret from Vault via external-secrets, instead
+# of assuming `image-pull-secret` (see imagePullSecrets above) already exists
+# in the namespace. Off by default — not yet validated against a real
+# SecretStore/Vault KV path for this workload.
+vault:
+  enabled: false
+  refreshInterval: "1h"
+  secretStoreName: "vault-store"
+  secretStoreKind: "SecretStore"
+  kv:
+    path: "secret/registry/icr"
+imagePullSecretName: "datahub-v2-smoke-tests-secret"
 
-    # Vault mTLS client cert for the Spark check (see spark_auth.py). Off by
-    # default: flip on once a Certificate/Secret has been provisioned for
-    # this workload's own identity (see this chart's README).
-    vaultClientCert:
-      enabled: false
-      secretName: ""
-      mountPath: /client-cert
+# ============================================================================
+# Airflow CronJob
+# ============================================================================
+airflow:
+  env:
+    - name: ENV
+      value: "dev"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: TARGET
+      value: "hprd"
+    - name: ENV_LIST
+      value: "dev,int,qual"
+    - name: SERVICE
+      value: "airflow"
+    - name: HTTP_TIMEOUT
+      value: "10"
+    - name: INSTANCES_CONFIG_PATH
+      value: "/etc/datahub-v2-smoke-tests/instances.json"
+    - name: LOCAL_OUTPUT_PATH
+      value: "/tmp/status.json"
+    - name: COS_OBJECT_KEY
+      value: "monitoring-web/input/airflow/status.json"
+    # Credentials injected from the existing `cos-credentials` Secret.
+    - name: COS_ENDPOINT
+      valueFrom:
+        secretKeyRef: { name: cos-credentials, key: COS_ENDPOINT }
+    - name: COS_BUCKET_NAME
+      valueFrom:
+        secretKeyRef: { name: cos-credentials, key: COS_BUCKET_NAME }
+    - name: COS_REGION
+      valueFrom:
+        secretKeyRef: { name: cos-credentials, key: COS_REGION }
+    - name: COS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef: { name: cos-credentials, key: COS_ACCESS_KEY_ID }
+    - name: COS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef: { name: cos-credentials, key: COS_SECRET_ACCESS_KEY }
+  volumeMounts:
+    - name: instances-config
+      mountPath: /etc/datahub-v2-smoke-tests
+      readOnly: true
+  # ⚠️ configMap.name below can't reference the chart's fullname helper (values.yaml
+  # isn't templated) — it must match `<release-name>-<chart-name>-instances` for
+  # whatever release name you actually deploy under. Update it if you install
+  # under a different release name than `datahub-v2-smoke-tests`.
+  volumes:
+    - name: instances-config
+      configMap:
+        name: datahub-v2-smoke-tests-datahub-v2-smoke-tests-instances
+        items:
+          - key: instances.json
+            path: instances.json
+  resources: {}
 
-  # ============================================================================
-  # Airflow instances to check (same shape as the airflowctl_inst_list_json
-  # Airflow Variable, as a native YAML list instead of a JSON string).
-  # ============================================================================
-  instances:
-    - apcode: a101731
-      customer:
-        apcode: a101731
-        name: aidi
-        snow_label: a3i
-      env: dev
-      release_id: 53d53716
-      url: https://astronomer-a101731-dev-53d53716.data.cloud.net.intra
-      version: 3.5.3
-      zone: hprd
-    - apcode: ap50708
-      customer:
-        apcode: ap50708
-        name: arval
-        snow_label: arval
-      env: dev
-      release_id: 70af7d64
-      url: https://astronomer-ap50708-dev-70af7d64.data.cloud.net.intra
-      version: 3.5.3
-      zone: hprd
+# ============================================================================
+# Spark CronJob — VAULT_NS/VAULT_URL and the client-cert volume are left empty
+# until the Vault cert-auth role for this workload's identity is set up (see
+# README). Until then this CronJob will run but fail to authenticate.
+# ============================================================================
+spark:
+  env:
+    - name: ENV
+      value: "dev"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: TARGET
+      value: "hprd"
+    - name: ENV_LIST
+      value: "dev,int,qual"
+    - name: SERVICE
+      value: "spark"
+    - name: HTTP_TIMEOUT
+      value: "10"
+    - name: LOCAL_OUTPUT_PATH
+      value: "/tmp/status.json"
+    - name: COS_OBJECT_KEY
+      value: "monitoring-web/input/spark/status.json"
+    - name: VAULT_NS
+      value: ""
+    - name: VAULT_URL
+      value: ""
+    - name: COS_ENDPOINT
+      valueFrom:
+        secretKeyRef: { name: cos-credentials, key: COS_ENDPOINT }
+    - name: COS_BUCKET_NAME
+      valueFrom:
+        secretKeyRef: { name: cos-credentials, key: COS_BUCKET_NAME }
+    - name: COS_REGION
+      valueFrom:
+        secretKeyRef: { name: cos-credentials, key: COS_REGION }
+    - name: COS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef: { name: cos-credentials, key: COS_ACCESS_KEY_ID }
+    - name: COS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef: { name: cos-credentials, key: COS_SECRET_ACCESS_KEY }
+  volumeMounts: []
+  volumes: []
+  resources: {}
+
+# ============================================================================
+# Airflow instances to check — passed through as a raw JSON blob (not a native
+# YAML structure) so scripts/instances.py can read/process it as-is, same as
+# the `airflowctl_inst_list_json` Airflow Variable it mirrors. Currently seeded
+# with two example instances — replace with the real list before installing.
+# ============================================================================
+smokeTest:
+  instancesJson: |
+    [
+      {
+        "apcode": "a101731",
+        "customer": {
+          "apcode": "a101731",
+          "name": "aidi",
+          "snow_label": "a3i"
+        },
+        "env": "dev",
+        "release_id": "53d53716",
+        "url": "https://astronomer-a101731-dev-53d53716.data.cloud.net.intra",
+        "version": "3.5.3",
+        "zone": "hprd"
+      },
+      {
+        "apcode": "ap50708",
+        "customer": {
+          "apcode": "ap50708",
+          "name": "arval",
+          "snow_label": "arval"
+        },
+        "env": "dev",
+        "release_id": "70af7d64",
+        "url": "https://astronomer-ap50708-dev-70af7d64.data.cloud.net.intra",
+        "version": "3.5.3",
+        "zone": "hprd"
+      }
+    ]

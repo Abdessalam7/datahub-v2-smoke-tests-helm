@@ -1,15 +1,14 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ .Values.smokeTests.name }}-spark
-  namespace: {{ .Values.global.namespace }}
+  name: {{ include "datahub-v2-smoke-tests.fullname" . }}-spark
   labels:
-    app: {{ .Values.smokeTests.name }}-spark
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "datahub-v2-smoke-tests.name" . }}
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
     app.kubernetes.io/component: smoke-tests-spark
 spec:
-  schedule: {{ .Values.smokeTests.schedule | quote }}
-  concurrencyPolicy: {{ .Values.smokeTests.concurrencyPolicy }}
+  schedule: {{ .Values.schedule | quote }}
+  concurrencyPolicy: {{ .Values.concurrencyPolicy }}
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
@@ -17,75 +16,71 @@ spec:
       template:
         metadata:
           labels:
-            app: {{ .Values.smokeTests.name }}-spark
-            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/name: {{ include "datahub-v2-smoke-tests.name" . }}
+          {{- with .Values.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
         spec:
           restartPolicy: OnFailure
-          serviceAccountName: {{ .Values.smokeTests.serviceAccount.name }}
+          serviceAccountName: {{ include "datahub-v2-smoke-tests.serviceAccountName" . }}
+          {{- with .Values.imagePullSecrets }}
           imagePullSecrets:
-            - name: {{ .Values.global.imagePullSecret }}
-
-          {{- if .Values.smokeTests.securityContext.enabled }}
-          securityContext:
-            runAsNonRoot: {{ .Values.smokeTests.securityContext.runAsNonRoot }}
-            runAsUser: {{ .Values.smokeTests.securityContext.runAsUser }}
-            runAsGroup: {{ .Values.smokeTests.securityContext.runAsGroup }}
-            fsGroup: {{ .Values.smokeTests.securityContext.fsGroup }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
-
+          {{- if .Values.securityContext.enabled }}
+          securityContext:
+            {{- with .Values.securityContext.runAsNonRoot }}
+            runAsNonRoot: {{ . }}
+            {{- end }}
+            {{- with .Values.securityContext.runAsUser }}
+            runAsUser: {{ . }}
+            {{- end }}
+            {{- with .Values.securityContext.runAsGroup }}
+            runAsGroup: {{ . }}
+            {{- end }}
+            {{- with .Values.securityContext.fsGroup }}
+            fsGroup: {{ . }}
+            {{- end }}
+          {{- end }}
           containers:
             - name: smoke-tests-spark
-              image: "{{ .Values.smokeTests.image.repository }}:{{ .Values.smokeTests.image.tag }}"
-              imagePullPolicy: {{ .Values.smokeTests.image.pullPolicy }}
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
               workingDir: /app
-              command: ["python", "-u", "scripts/main.py"]
-
-              env:
-                - name: SERVICE
-                  value: "spark"
-                {{- range $key, $value := .Values.smokeTests.spark.env }}
-                - name: {{ $key }}
-                  value: {{ $value | quote }}
-                {{- end }}
-                - name: COS_ENDPOINT
-                  valueFrom:
-                    secretKeyRef:
-                      name: {{ .Values.smokeTests.cosSecret.secretName }}
-                      key: {{ .Values.smokeTests.cosSecret.keys.COS_ENDPOINT }}
-                - name: COS_BUCKET_NAME
-                  valueFrom:
-                    secretKeyRef:
-                      name: {{ .Values.smokeTests.cosSecret.secretName }}
-                      key: {{ .Values.smokeTests.cosSecret.keys.COS_BUCKET_NAME }}
-                - name: COS_REGION
-                  valueFrom:
-                    secretKeyRef:
-                      name: {{ .Values.smokeTests.cosSecret.secretName }}
-                      key: {{ .Values.smokeTests.cosSecret.keys.COS_REGION }}
-                - name: COS_ACCESS_KEY_ID
-                  valueFrom:
-                    secretKeyRef:
-                      name: {{ .Values.smokeTests.cosSecret.secretName }}
-                      key: {{ .Values.smokeTests.cosSecret.keys.COS_ACCESS_KEY_ID }}
-                - name: COS_SECRET_ACCESS_KEY
-                  valueFrom:
-                    secretKeyRef:
-                      name: {{ .Values.smokeTests.cosSecret.secretName }}
-                      key: {{ .Values.smokeTests.cosSecret.keys.COS_SECRET_ACCESS_KEY }}
-
-              {{- if .Values.smokeTests.spark.vaultClientCert.enabled }}
-              volumeMounts:
-                - name: vault-client-cert
-                  mountPath: {{ .Values.smokeTests.spark.vaultClientCert.mountPath }}
-                  readOnly: true
+              {{- with .Values.command }}
+              {{- if kindIs "string" . }}
+              command: [{{ . | quote }}]
+              {{- else if kindIs "slice" . }}
+              command:
+                {{- toYaml . | nindent 16 }}
               {{- end }}
-
+              {{- end }}
+              {{- with .Values.spark.env }}
+              env:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with .Values.spark.volumeMounts }}
+              volumeMounts:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with .Values.spark.resources }}
               resources:
-                {{- toYaml .Values.smokeTests.resources | nindent 16 }}
-
-          {{- if .Values.smokeTests.spark.vaultClientCert.enabled }}
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+          {{- with .Values.spark.volumes }}
           volumes:
-            - name: vault-client-cert
-              secret:
-                secretName: {{ .Values.smokeTests.spark.vaultClientCert.secretName }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
           {{- end }}

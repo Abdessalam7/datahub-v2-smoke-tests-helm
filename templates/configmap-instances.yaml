@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Values.smokeTests.name }}-instances
-  namespace: {{ .Values.global.namespace }}
+  name: {{ include "datahub-v2-smoke-tests.fullname" . }}-instances
   labels:
-    app: {{ .Values.smokeTests.name }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "datahub-v2-smoke-tests.name" . }}
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 data:
-  instances.json: {{ .Values.smokeTests.instances | toJson | quote }}
+  instances.json: |
+{{ .Values.smokeTest.instancesJson | indent 4 }}
