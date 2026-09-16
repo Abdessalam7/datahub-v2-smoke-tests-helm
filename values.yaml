@@ -1,11 +1,10 @@
 image:
-  repository: private.fr2.icr.io/a101731-hprd/datahub-v2-smoke-tests
-  tag: "main"
+  repository: private.fr2.icr.io/a101731-hprd/pysmoke-test
+  tag: main
   pullPolicy: Always
 
 command: ["python", "-u", "scripts/main.py"]
 
-# Both CronJobs (Airflow, Spark) share this schedule.
 schedule: "*/10 * * * *"
 concurrencyPolicy: Forbid
 
@@ -27,30 +26,12 @@ affinity: {}
 
 serviceAccount:
   create: true
-  name: "datahub-v2-smoke-tests"
-  # Identity cert-manager issues a client certificate for — this is what Spark's
-  # Vault cert-auth (see spark_auth.py) will authenticate as, once wired up.
+  name: "pysmoke"
   annotations:
     cert-manager.io/issuer: datalab-cloud-echonet-issuer
     cert-manager.io/issuer-group: horizon.evertrust.io
     cert-manager.io/issuer-kind: ClusterIssuer
 
-# Pulls the registry image-pull secret from Vault via external-secrets, instead
-# of assuming `image-pull-secret` (see imagePullSecrets above) already exists
-# in the namespace. Off by default — not yet validated against a real
-# SecretStore/Vault KV path for this workload.
-vault:
-  enabled: false
-  refreshInterval: "1h"
-  secretStoreName: "vault-store"
-  secretStoreKind: "SecretStore"
-  kv:
-    path: "secret/registry/icr"
-imagePullSecretName: "datahub-v2-smoke-tests-secret"
-
-# ============================================================================
-# Airflow CronJob
-# ============================================================================
 airflow:
   env:
     - name: ENV
@@ -66,49 +47,49 @@ airflow:
     - name: HTTP_TIMEOUT
       value: "10"
     - name: INSTANCES_CONFIG_PATH
-      value: "/etc/datahub-v2-smoke-tests/instances.json"
+      value: "/etc/pysmoke-test/instances.json"
     - name: LOCAL_OUTPUT_PATH
       value: "/tmp/status.json"
     - name: COS_OBJECT_KEY
       value: "monitoring-web/input/airflow/status.json"
-    # Credentials injected from the existing `cos-credentials` Secret.
     - name: COS_ENDPOINT
       valueFrom:
-        secretKeyRef: { name: cos-credentials, key: COS_ENDPOINT }
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_ENDPOINT
     - name: COS_BUCKET_NAME
       valueFrom:
-        secretKeyRef: { name: cos-credentials, key: COS_BUCKET_NAME }
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_BUCKET_NAME
     - name: COS_REGION
       valueFrom:
-        secretKeyRef: { name: cos-credentials, key: COS_REGION }
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_REGION
     - name: COS_ACCESS_KEY_ID
       valueFrom:
-        secretKeyRef: { name: cos-credentials, key: COS_ACCESS_KEY_ID }
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_ACCESS_KEY_ID
     - name: COS_SECRET_ACCESS_KEY
       valueFrom:
-        secretKeyRef: { name: cos-credentials, key: COS_SECRET_ACCESS_KEY }
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_SECRET_ACCESS_KEY
   volumeMounts:
     - name: instances-config
-      mountPath: /etc/datahub-v2-smoke-tests
+      mountPath: /etc/pysmoke-test
       readOnly: true
-  # ⚠️ configMap.name below can't reference the chart's fullname helper (values.yaml
-  # isn't templated) — it must match `<release-name>-<chart-name>-instances` for
-  # whatever release name you actually deploy under. Update it if you install
-  # under a different release name than `datahub-v2-smoke-tests`.
   volumes:
     - name: instances-config
       configMap:
-        name: datahub-v2-smoke-tests-datahub-v2-smoke-tests-instances
+        name: pysmoke-test-pysmoke-instances
         items:
           - key: instances.json
             path: instances.json
   resources: {}
 
-# ============================================================================
-# Spark CronJob — VAULT_NS/VAULT_URL and the client-cert volume are left empty
-# until the Vault cert-auth role for this workload's identity is set up (see
-# README). Until then this CronJob will run but fail to authenticate.
-# ============================================================================
 spark:
   env:
     - name: ENV
@@ -133,19 +114,29 @@ spark:
       value: "https://vault.staging.echonet.net.intra"
     - name: COS_ENDPOINT
       valueFrom:
-        secretKeyRef: { name: cos-credentials, key: COS_ENDPOINT }
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_ENDPOINT
     - name: COS_BUCKET_NAME
       valueFrom:
-        secretKeyRef: { name: cos-credentials, key: COS_BUCKET_NAME }
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_BUCKET_NAME
     - name: COS_REGION
       valueFrom:
-        secretKeyRef: { name: cos-credentials, key: COS_REGION }
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_REGION
     - name: COS_ACCESS_KEY_ID
       valueFrom:
-        secretKeyRef: { name: cos-credentials, key: COS_ACCESS_KEY_ID }
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_ACCESS_KEY_ID
     - name: COS_SECRET_ACCESS_KEY
       valueFrom:
-        secretKeyRef: { name: cos-credentials, key: COS_SECRET_ACCESS_KEY }
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_SECRET_ACCESS_KEY
   volumeMounts:
     - name: vault-client-cert
       mountPath: /client-cert
@@ -153,29 +144,16 @@ spark:
   volumes:
     - name: vault-client-cert
       secret:
-        secretName: datahub-v2-smoke-tests-spark-vault-cert   # must match vaultClientCert.secretName below
+        secretName: pysmoke-test-spark-vault-cert
   resources: {}
-
-  # Client certificate used to authenticate to Vault's cert-auth method (see
-  # spark_auth.py). Issued by the same ClusterIssuer already proven working in
-  # this cluster (it issues the web UI's ingress TLS cert) — self-service, no
-  # Vault-team dependency for this part. Requires the matching Vault cert-auth
-  # role to also be registered (see README) — otherwise the cert mounts fine
-  # but spark_auth.py's login still fails.
   vaultClientCert:
     enabled: true
-    secretName: datahub-v2-smoke-tests-spark-vault-cert
+    secretName: pysmoke-test-spark-vault-cert
     commonName: pysmoke-test-spark.data.cloud.net.intra
     issuerName: datalab-cloud-echonet-issuer
     issuerKind: ClusterIssuer
     issuerGroup: horizon.evertrust.io
 
-# ============================================================================
-# Airflow instances to check — passed through as a raw JSON blob (not a native
-# YAML structure) so scripts/instances.py can read/process it as-is, same as
-# the `airflowctl_inst_list_json` Airflow Variable it mirrors. Currently seeded
-# with two example instances — replace with the real list before installing.
-# ============================================================================
 smokeTest:
   instancesJson: |
     [
