@@ -146,27 +146,24 @@ spark:
     - name: COS_SECRET_ACCESS_KEY
       valueFrom:
         secretKeyRef: { name: cos-credentials, key: COS_SECRET_ACCESS_KEY }
-  # Once vaultClientCert.enabled is true, uncomment and adjust:
-  # volumeMounts:
-  #   - name: vault-client-cert
-  #     mountPath: /client-cert
-  #     readOnly: true
-  volumeMounts: []
-  # volumes:
-  #   - name: vault-client-cert
-  #     secret:
-  #       secretName: datahub-v2-smoke-tests-spark-vault-cert   # must match vaultClientCert.secretName below
-  volumes: []
+  volumeMounts:
+    - name: vault-client-cert
+      mountPath: /client-cert
+      readOnly: true
+  volumes:
+    - name: vault-client-cert
+      secret:
+        secretName: datahub-v2-smoke-tests-spark-vault-cert   # must match vaultClientCert.secretName below
   resources: {}
 
   # Client certificate used to authenticate to Vault's cert-auth method (see
   # spark_auth.py). Issued by the same ClusterIssuer already proven working in
   # this cluster (it issues the web UI's ingress TLS cert) — self-service, no
-  # Vault-team dependency for this part. Off by default: flip on once you've
-  # also registered a matching Vault cert-auth role (see README) and added the
-  # volume/volumeMount above.
+  # Vault-team dependency for this part. Requires the matching Vault cert-auth
+  # role to also be registered (see README) — otherwise the cert mounts fine
+  # but spark_auth.py's login still fails.
   vaultClientCert:
-    enabled: false
+    enabled: true
     secretName: datahub-v2-smoke-tests-spark-vault-cert
     commonName: pysmoke-test-spark.data.cloud.net.intra
     issuerName: datalab-cloud-echonet-issuer
