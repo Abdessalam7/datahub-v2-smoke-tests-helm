@@ -1,0 +1,18 @@
+{{- if .Values.spark.vaultClientCert.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "datahub-v2-smoke-tests.fullname" . }}-spark-vault-cert
+  labels:
+    app.kubernetes.io/name: {{ include "datahub-v2-smoke-tests.name" . }}
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
+spec:
+  secretName: {{ .Values.spark.vaultClientCert.secretName }}
+  commonName: {{ .Values.spark.vaultClientCert.commonName }}
+  usages:
+    - client auth
+  issuerRef:
+    name: {{ .Values.spark.vaultClientCert.issuerName }}
+    kind: {{ .Values.spark.vaultClientCert.issuerKind }}
+    group: {{ .Values.spark.vaultClientCert.issuerGroup }}
+{{- end }}

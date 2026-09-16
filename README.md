@@ -17,6 +17,7 @@ templates/
   configmap-instances.yaml renders .Values.smokeTest.instancesJson as-is
   serviceaccount.yaml
   externalsecret.yaml      optional — pulls the image-pull secret from Vault
+  certificate.yaml         optional — client cert for Spark's Vault cert-auth
 ```
 
 Two separate CronJobs, one per tech, both on `.Values.schedule` (every 10
@@ -51,14 +52,40 @@ the templates.
    `spark.env` (default `TARGET=hprd`, `ENV_LIST=dev,int,qual`) — override
    per `helm install`/`-f values-<env>.yaml` for the other splits (e.g.
    `TARGET=prod ENV_LIST=prod,pprd`).
-5. **Spark only — Vault mTLS cert**: `spark.env` ships with `VAULT_NS`/
-   `VAULT_URL` empty and `spark.volumes`/`spark.volumeMounts` empty —
-   `spark_auth.py` needs a client certificate mounted to authenticate to
-   Vault. The `serviceAccount.annotations` (cert-manager issuer) already
-   provision an identity for this workload; once a Vault cert-auth role is
-   set up for that identity, fill in `VAULT_NS`/`VAULT_URL` and add the
-   cert Secret as a volume/volumeMount under `spark.volumes`/
-   `spark.volumeMounts`.
+5. **Spark only — Vault mTLS cert**: `spark_auth.py` needs a client
+   certificate mounted at `/client-cert` to authenticate to Vault (cert-auth
+   method). Two things gate this, both off by default:
+
+   - **`spark.vaultClientCert.enabled`**: when `true`, `templates/certificate.yaml`
+     requests a client cert from `datalab-cloud-echonet-issuer` (the same
+     ClusterIssuer that already issues the web UI's ingress TLS cert in this
+     cluster — proven working, no Vault-team dependency for this part),
+     stored in `spark.vaultClientCert.secretName`. You still need to add the
+     matching volume/volumeMount under `spark.volumes`/`spark.volumeMounts`
+     (see the commented example right above them in `values.yaml`) — this
+     can't be wired automatically since `values.yaml` isn't templated.
+   - **A Vault cert-auth role trusting that CA** — this chart can't create it
+     (Vault config, not a Kubernetes resource). Once the `Certificate` above
+     is `Ready`, pull its CA and register a role, e.g. from a CI job with a
+     Vault token scoped for it (adapt to your actual policy/namespace):
+     ```bash
+     kubectl get secret datahub-v2-smoke-tests-spark-vault-cert \
+       -n <namespace> -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/ca.pem
+
+     vault write -namespace="a101731" auth/cert/certs/pysmoke-test-spark \
+       display_name=pysmoke-test-spark \
+       policies=secretstore \
+       allowed_common_names=pysmoke-test-spark.data.cloud.net.intra \
+       certificate=@/tmp/ca.pem
+     ```
+     Adjust `policies` to whatever actually grants read on the Keycloak
+     `oidc-account` secret `spark_auth.py` needs next — `secretstore` is a
+     guess based on what's already attached to similar roles in this org,
+     not confirmed for this specific secret.
+
+   Once both are done, fill in `VAULT_NS`/`VAULT_URL` in `spark.env`
+   (currently defaulted to `a101731` / the staging Vault address, matching
+   the non-prod branch of this org's CI — override for prod).
 6. **`vault.enabled`** (default `false`): if set, `externalsecret.yaml`
    creates the `imagePullSecretName` Secret from Vault (via the
    external-secrets operator, KV path `vault.kv.path`) instead of assuming
