@@ -196,16 +196,42 @@ dags:
     - name: QUEUED_THRESHOLD_SECONDS
       value: "600"
     # Off by default — sends an email only when a run finds a problem (failed
-    # or delayed DAG); leave EMAIL_ENABLED false until SMTP_HOST/EMAIL_TO are
-    # actually set, otherwise the run just logs a warning and skips the send.
+    # or delayed DAG); leave EMAIL_ENABLED false until the smtp-credentials
+    # secret below actually exists, otherwise the run just logs a warning
+    # and skips the send.
     - name: EMAIL_ENABLED
       value: "false"
+    # Sourced from a Vault-backed secret (host/user/password for an
+    # authenticated relay) — double-check these key names against whatever
+    # the real Secret's keys are, same caveat as cos-credentials above.
     - name: SMTP_HOST
-      value: ""
+      valueFrom:
+        secretKeyRef:
+          name: smtp-credentials
+          key: HOST
     - name: SMTP_PORT
-      value: "25"
+      valueFrom:
+        secretKeyRef:
+          name: smtp-credentials
+          key: PORT
+    - name: SMTP_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: smtp-credentials
+          key: USER
+    - name: SMTP_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: smtp-credentials
+          key: PASSWORD
+    - name: SMTP_USE_TLS
+      value: "true"
     - name: EMAIL_FROM
-      value: ""
+      valueFrom:
+        secretKeyRef:
+          name: smtp-credentials
+          key: USER
+    # Comma-separated recipients — not sensitive, kept as a plain value.
     - name: EMAIL_TO
       value: ""
     - name: INSTANCES_CONFIG_PATH

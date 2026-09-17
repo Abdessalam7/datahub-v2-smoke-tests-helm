@@ -159,8 +159,12 @@ the templates.
    (failed or delayed) straight off the same run's in-memory results — no
    extra storage. It's unconditional per run: while a DAG stays broken,
    an email goes out every cycle that still sees it broken (no dedup/
-   throttling yet). Set `SMTP_HOST`/`EMAIL_FROM`/`EMAIL_TO` (comma-separated
-   recipients) before enabling — sending is skipped with a warning if
-   `SMTP_HOST`/`EMAIL_TO` are empty. Assumes an unauthenticated internal SMTP
-   relay (no TLS/auth) on `SMTP_PORT` (default 25); add auth/TLS support
-   later if your relay requires it.
+   throttling yet). `SMTP_HOST`/`SMTP_USERNAME`/`SMTP_PASSWORD`/`EMAIL_FROM`
+   read from a `smtp-credentials` Secret (keys `HOST`/`PORT`/`USER`/
+   `PASSWORD`) this chart does not create — double-check those key names
+   against whatever your real Vault-backed Secret's keys actually are, same
+   caveat as `cos-credentials` above. `EMAIL_TO` (comma-separated
+   recipients) is a plain value, set per environment. Sending is skipped
+   with a warning if `SMTP_HOST`/`EMAIL_TO` are empty. `SMTP_USE_TLS`
+   defaults to `true` (STARTTLS + login) for an authenticated relay; set it
+   to `false` if yours takes unauthenticated connections instead.
