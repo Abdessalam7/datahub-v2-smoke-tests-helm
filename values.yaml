@@ -196,6 +196,12 @@ dags:
     # which will 403 for any client not yet set up.
     - name: CLIENT_LIST
       value: ""
+    # Further narrows down to specific instance url slugs (comma-separated,
+    # e.g. "astronomer-ap24042-dev-xxxx") — handy for fast iteration on one
+    # instance instead of waiting on every instance CLIENT_LIST matched.
+    # Empty = every instance CLIENT_LIST/ENV_LIST already matched.
+    - name: INSTANCE_LIST
+      value: ""
     - name: SERVICE
       value: "dags"
     - name: HTTP_TIMEOUT
