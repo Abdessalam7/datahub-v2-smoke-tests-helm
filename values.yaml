@@ -171,6 +171,78 @@ spark:
     pkiRole: "pysmoke-spark"
     refreshInterval: "24h"
 
+# Monitors every DAG (not just health) on each Airflow instance, flagging ones
+# stuck "queued" past dags.env.QUEUED_THRESHOLD_SECONDS. Off by default — needs
+# a technical user provisioned on each client's Airflow first (see README).
+dags:
+  enabled: false
+  env:
+    - name: ENV
+      value: "dev"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: ENV_LIST
+      value: "dev,int,qual"
+    - name: SERVICE
+      value: "dags"
+    - name: HTTP_TIMEOUT
+      value: "10"
+    - name: QUEUED_THRESHOLD_SECONDS
+      value: "600"
+    - name: INSTANCES_CONFIG_PATH
+      value: "/etc/pysmoke-test/instances.json"
+    - name: LOCAL_OUTPUT_PATH
+      value: "/tmp/status.json"
+    - name: COS_OBJECT_KEY
+      value: "monitoring-web/input/dags/status.json"
+    - name: AIRFLOW_DAG_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: airflow-dag-monitor
+          key: username
+    - name: AIRFLOW_DAG_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: airflow-dag-monitor
+          key: password
+    - name: COS_ENDPOINT
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_ENDPOINT
+    - name: COS_BUCKET_NAME
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_BUCKET_NAME
+    - name: COS_REGION
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_REGION
+    - name: COS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_ACCESS_KEY_ID
+    - name: COS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: cos-credentials
+          key: COS_SECRET_ACCESS_KEY
+  volumeMounts:
+    - name: instances-config
+      mountPath: /etc/pysmoke-test
+      readOnly: true
+  volumes:
+    - name: instances-config
+      configMap:
+        name: pysmoke-test-pysmoke-instances
+        items:
+          - key: instances.json
+            path: instances.json
+  resources: {}
+
 smokeTest:
   instancesJson: |
     [

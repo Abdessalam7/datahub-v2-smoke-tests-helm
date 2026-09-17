@@ -1,0 +1,88 @@
+{{- if .Values.dags.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "datahub-v2-smoke-tests.fullname" . }}-dags
+  labels:
+    app.kubernetes.io/name: {{ include "datahub-v2-smoke-tests.name" . }}
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
+    app.kubernetes.io/component: smoke-tests-dags
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  concurrencyPolicy: {{ .Values.concurrencyPolicy }}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ include "datahub-v2-smoke-tests.name" . }}
+          {{- with .Values.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ include "datahub-v2-smoke-tests.serviceAccountName" . }}
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.securityContext.enabled }}
+          securityContext:
+            {{- with .Values.securityContext.runAsNonRoot }}
+            runAsNonRoot: {{ . }}
+            {{- end }}
+            {{- with .Values.securityContext.runAsUser }}
+            runAsUser: {{ . }}
+            {{- end }}
+            {{- with .Values.securityContext.runAsGroup }}
+            runAsGroup: {{ . }}
+            {{- end }}
+            {{- with .Values.securityContext.fsGroup }}
+            fsGroup: {{ . }}
+            {{- end }}
+          {{- end }}
+          containers:
+            - name: smoke-tests-dags
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              workingDir: /app
+              {{- with .Values.command }}
+              {{- if kindIs "string" . }}
+              command: [{{ . | quote }}]
+              {{- else if kindIs "slice" . }}
+              command:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- end }}
+              {{- with .Values.dags.env }}
+              env:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with .Values.dags.volumeMounts }}
+              volumeMounts:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with .Values.dags.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+          {{- with .Values.dags.volumes }}
+          volumes:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

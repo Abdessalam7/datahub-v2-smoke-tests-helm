@@ -14,6 +14,7 @@ templates/
   _helpers.tpl
   cronjob-airflow.yaml     runs scripts/main.py, env from .Values.airflow.env
   cronjob-spark.yaml       runs scripts/main.py, env from .Values.spark.env
+  cronjob-dags.yaml        optional — DAG-level monitoring, env from .Values.dags.env
   configmap-instances.yaml renders .Values.smokeTest.instancesJson as-is
   serviceaccount.yaml
   externalsecret.yaml      optional — pulls the image-pull secret from Vault
@@ -132,3 +133,22 @@ the templates.
    external-secrets operator, KV path `vault.kv.path`) instead of assuming
    `image-pull-secret` already exists in the namespace. Not yet validated
    against a real SecretStore for this workload — leave off until confirmed.
+8. **`dags.enabled`** (default `false`): a separate CronJob that walks
+   *every* DAG on each client's Airflow instance (not just the health probe
+   `cronjob-airflow.yaml` does) via the Airflow REST API, flagging any DAG
+   still `queued` past `QUEUED_THRESHOLD_SECONDS` (default 600s — well above
+   normal executor cold-start, tune once you have real data). Requires a
+   technical user created on each client's Airflow, credentials in a
+   `airflow-dag-monitor` Secret (keys `username`/`password`) this chart does
+   not create:
+   ```bash
+   kubectl create secret generic airflow-dag-monitor \
+     --from-literal=username=<technical-user> \
+     --from-literal=password=<password> \
+     -n <namespace>
+   ```
+   Basic Auth for now; migrating to Vault-issued credentials is planned but
+   not implemented. `dags.env.ENV_LIST` filters which client instances are
+   checked, same as `airflow.env.ENV_LIST`. The web UI shows every DAG;
+   filtering to problems only (failed, or delayed) is left to whatever
+   sends the alert email — not yet wired up here.
