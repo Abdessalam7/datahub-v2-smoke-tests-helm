@@ -148,7 +148,12 @@ the templates.
      -n <namespace>
    ```
    Basic Auth for now; migrating to Vault-issued credentials is planned but
-   not implemented. `dags.env.ENV_LIST` filters which client instances are
-   checked, same as `airflow.env.ENV_LIST`. The web UI shows every DAG;
+   not implemented. `dags.env.ENV_LIST` filters by environment, same as
+   `airflow.env.ENV_LIST`, but each client's Airflow is a separate instance
+   with its own user base — the technical user only exists on whichever
+   clients it's been created on. Use `dags.env.CLIENT_LIST` (comma-separated
+   business_line names, e.g. `"pf"`) to scope the check to only those
+   clients during rollout; leaving it empty checks everyone and 403s for
+   every client not yet provisioned. The web UI shows every DAG;
    filtering to problems only (failed, or delayed) is left to whatever
    sends the alert email — not yet wired up here.

@@ -183,6 +183,12 @@ dags:
       value: "1"
     - name: ENV_LIST
       value: "dev,int,qual"
+    # Each client's Airflow is its own instance with its own user base — scope
+    # this to whichever clients actually have the technical user provisioned
+    # (comma-separated business_line names, e.g. "pf"). Empty = every client,
+    # which will 403 for any client not yet set up.
+    - name: CLIENT_LIST
+      value: ""
     - name: SERVICE
       value: "dags"
     - name: HTTP_TIMEOUT
