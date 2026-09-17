@@ -238,6 +238,11 @@ dags:
           key: password
     - name: SMTP_USE_TLS
       value: "true"
+    # Turn on temporarily to print the full SMTP conversation in the job's
+    # logs — useful when "Sent alert email" logs but nothing arrives (e.g.
+    # a relay-side filter accepts then silently drops the message).
+    - name: SMTP_DEBUG
+      value: "false"
     - name: EMAIL_FROM
       valueFrom:
         secretKeyRef:
