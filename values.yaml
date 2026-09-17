@@ -152,19 +152,26 @@ spark:
       secret:
         secretName: pysmoke-test-spark-vault-cert
   resources: {}
+  # Bootstrap only — the datalab-cloud-echonet-issuer (EverTrust Horizon) has
+  # been confirmed to issue server-auth-only certs (no "client auth" EKU) no
+  # matter what usages are requested here, so cert-manager can't be trusted
+  # to own this secret ongoing: it'll periodically overwrite a good cert with
+  # one Vault's cert-auth rejects. Leave this false; see README for the
+  # manual one-time seed procedure via Vault's own PKI engine instead.
   vaultClientCert:
-    enabled: true
+    enabled: false
     secretName: pysmoke-test-spark-vault-cert
     commonName: pysmoke-test-spark.data.cloud.net.intra
     issuerName: datalab-cloud-echonet-issuer
     issuerKind: ClusterIssuer
     issuerGroup: horizon.evertrust.io
-  # Auto-renews spark.vaultClientCert.secretName before its 30-day TTL expires,
-  # using the cert itself (cert-auth) to fetch its own replacement from Vault's
-  # PKI engine — no Kubernetes-auth dependency. See README for the matching
-  # `vault write auth/cert/certs/...` policy update this requires.
+  # Auto-renews spark.vaultClientCert.secretName using the cert itself
+  # (cert-auth) to fetch its own replacement from Vault's PKI engine — no
+  # Kubernetes-auth dependency. This is the only thing that should manage
+  # the secret once it's seeded (see README) — keep vaultClientCert.enabled
+  # false so cert-manager doesn't fight it for the same secret.
   vaultCertRenewal:
-    enabled: false
+    enabled: true
     vaultServer: "https://vault.staging.echonet.net.intra"
     vaultNamespace: "a101731"
     pkiPath: "pkis/pysmoke-test"
@@ -201,36 +208,36 @@ dags:
     # and skips the send.
     - name: EMAIL_ENABLED
       value: "false"
-    # Sourced from a Vault-backed secret (host/user/password for an
-    # authenticated relay) — double-check these key names against whatever
-    # the real Secret's keys are, same caveat as cos-credentials above.
+    # Sourced from the Vault smtp secret (host/port/user/password/sender) —
+    # double-check these key names against whatever the real Secret's keys
+    # are, same caveat as cos-credentials above.
     - name: SMTP_HOST
       valueFrom:
         secretKeyRef:
           name: smtp-credentials
-          key: HOST
+          key: host
     - name: SMTP_PORT
       valueFrom:
         secretKeyRef:
           name: smtp-credentials
-          key: PORT
+          key: port
     - name: SMTP_USERNAME
       valueFrom:
         secretKeyRef:
           name: smtp-credentials
-          key: USER
+          key: user
     - name: SMTP_PASSWORD
       valueFrom:
         secretKeyRef:
           name: smtp-credentials
-          key: PASSWORD
+          key: password
     - name: SMTP_USE_TLS
       value: "true"
     - name: EMAIL_FROM
       valueFrom:
         secretKeyRef:
           name: smtp-credentials
-          key: USER
+          key: sender
     # Comma-separated recipients — not sensitive, kept as a plain value.
     - name: EMAIL_TO
       value: ""
