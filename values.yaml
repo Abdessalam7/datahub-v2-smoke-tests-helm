@@ -202,12 +202,11 @@ dags:
       value: "10"
     - name: QUEUED_THRESHOLD_SECONDS
       value: "600"
-    # Off by default — sends an email only when a run finds a problem (failed
-    # or delayed DAG); leave EMAIL_ENABLED false until the smtp-credentials
-    # secret below actually exists, otherwise the run just logs a warning
-    # and skips the send.
+    # Sends an email only when a run finds a problem (failed or delayed DAG);
+    # requires the smtp-credentials secret below and EMAIL_TO to be set,
+    # otherwise the run just logs a warning and skips the send.
     - name: EMAIL_ENABLED
-      value: "false"
+      value: "true"
     # Sourced from the Vault smtp secret (host/port/user/password/sender) —
     # double-check these key names against whatever the real Secret's keys
     # are, same caveat as cos-credentials above.

@@ -172,7 +172,7 @@ the templates.
    business_line names, e.g. `"pf"`) to scope the check to only those
    clients during rollout; leaving it empty checks everyone and 403s for
    every client not yet provisioned. The web UI shows every DAG; email
-   alerting (`dags.env.EMAIL_ENABLED`, off by default) sends problems only
+   alerting (`dags.env.EMAIL_ENABLED`, on by default) sends problems only
    (failed or delayed) straight off the same run's in-memory results — no
    extra storage. It's unconditional per run: while a DAG stays broken,
    an email goes out every cycle that still sees it broken (no dedup/
