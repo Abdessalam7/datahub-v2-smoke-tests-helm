@@ -195,6 +195,19 @@ dags:
       value: "10"
     - name: QUEUED_THRESHOLD_SECONDS
       value: "600"
+    # Off by default — sends an email only when a run finds a problem (failed
+    # or delayed DAG); leave EMAIL_ENABLED false until SMTP_HOST/EMAIL_TO are
+    # actually set, otherwise the run just logs a warning and skips the send.
+    - name: EMAIL_ENABLED
+      value: "false"
+    - name: SMTP_HOST
+      value: ""
+    - name: SMTP_PORT
+      value: "25"
+    - name: EMAIL_FROM
+      value: ""
+    - name: EMAIL_TO
+      value: ""
     - name: INSTANCES_CONFIG_PATH
       value: "/etc/pysmoke-test/instances.json"
     - name: LOCAL_OUTPUT_PATH

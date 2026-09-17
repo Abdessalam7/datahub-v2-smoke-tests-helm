@@ -154,6 +154,13 @@ the templates.
    clients it's been created on. Use `dags.env.CLIENT_LIST` (comma-separated
    business_line names, e.g. `"pf"`) to scope the check to only those
    clients during rollout; leaving it empty checks everyone and 403s for
-   every client not yet provisioned. The web UI shows every DAG;
-   filtering to problems only (failed, or delayed) is left to whatever
-   sends the alert email — not yet wired up here.
+   every client not yet provisioned. The web UI shows every DAG; email
+   alerting (`dags.env.EMAIL_ENABLED`, off by default) sends problems only
+   (failed or delayed) straight off the same run's in-memory results — no
+   extra storage. It's unconditional per run: while a DAG stays broken,
+   an email goes out every cycle that still sees it broken (no dedup/
+   throttling yet). Set `SMTP_HOST`/`EMAIL_FROM`/`EMAIL_TO` (comma-separated
+   recipients) before enabling — sending is skipped with a warning if
+   `SMTP_HOST`/`EMAIL_TO` are empty. Assumes an unauthenticated internal SMTP
+   relay (no TLS/auth) on `SMTP_PORT` (default 25); add auth/TLS support
+   later if your relay requires it.
