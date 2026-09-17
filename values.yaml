@@ -175,7 +175,7 @@ spark:
 # stuck "queued" past dags.env.QUEUED_THRESHOLD_SECONDS. Off by default — needs
 # a technical user provisioned on each client's Airflow first (see README).
 dags:
-  enabled: false
+  enabled: true
   env:
     - name: ENV
       value: "dev"
